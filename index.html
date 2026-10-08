@@ -81,7 +81,7 @@
         </div>
         <div class="flex items-center space-x-2">
             <button id="soundBtn" class="bg-slate-900 border border-slate-700 px-2.5 py-1 rounded-lg text-xs font-bold uppercase text-slate-300 shadow" onclick="toggleMute()">
-                <span id="soundIcon">🔊</span> Mute
+                <span id="soundIcon">🔊</span> <span id="soundLabel">Mute</span>
             </button>
         </div>
     </header>
@@ -317,6 +317,25 @@
         let pendingWin = 0;
         let donCards = [];
         let donActive = false;
+        let donPromptTimer = null;
+
+        // --- v1.1: session stats + persistence ---
+        let handsPlayed = 0, biggestWin = 0;
+        const STORE_KEY = 'prestonsClubPoker_v1';
+        function saveState() {
+            try { localStorage.setItem(STORE_KEY, JSON.stringify({ credits: playerCredits, muted: isMuted, hands: handsPlayed, best: biggestWin })); } catch(e){}
+        }
+        function loadState() {
+            try {
+                const s = JSON.parse(localStorage.getItem(STORE_KEY));
+                if (!s) return;
+                if (typeof s.credits === 'number' && s.credits >= 0) playerCredits = Math.floor(s.credits);
+                isMuted = !!s.muted;
+                if (typeof s.hands === 'number' && s.hands >= 0) handsPlayed = Math.floor(s.hands);
+                if (typeof s.best === 'number' && s.best >= 0) biggestWin = Math.floor(s.best);
+            } catch(e){}
+        }
+        function statsSuffix() { return ' \u2022 ' + handsPlayed + ' HANDS \u2022 BEST ' + biggestWin; }
         
         // Triple play grid matrix data structure
         let hands = [ [], [], [] ]; 
@@ -334,19 +353,34 @@
             'two-pair': 'TWO PAIR', 'jacks-or-better': 'JACKS OR BETTER', 'high-card': 'NO WIN'
         };
 
-        function initAudio() { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+        function initAudio() {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+        }
         function playSound(f, d, t='sine', g=0.06) {
             if (isMuted) return;
             try { initAudio(); const o=audioCtx.createOscillator(), n=audioCtx.createGain(); o.type=t; o.frequency.setValueAtTime(f, audioCtx.currentTime); n.gain.setValueAtTime(g, audioCtx.currentTime); n.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime+d); o.connect(n); n.connect(audioCtx.destination); o.start(); o.stop(audioCtx.currentTime+d); } catch(e){}
         }
 
-        window.onload = function() { updateUI(); };
-        function toggleMute() { isMuted = !isMuted; document.getElementById('soundIcon').innerText = isMuted ? '🔇' : '🔊'; }
+        window.onload = function() {
+            loadState();
+            document.getElementById('soundIcon').innerText = isMuted ? '🔇' : '🔊';
+            document.getElementById('soundLabel').innerText = isMuted ? 'Unmute' : 'Mute';
+            updateUI();
+        };
+        function toggleMute() {
+            isMuted = !isMuted;
+            document.getElementById('soundIcon').innerText = isMuted ? '🔇' : '🔊';
+            document.getElementById('soundLabel').innerText = isMuted ? 'Unmute' : 'Mute';
+            saveState();
+        }
 
         function resetBankroll() {
             if (isAnimating) return;
+            if (donPromptTimer) { clearTimeout(donPromptTimer); donPromptTimer = null; }
+            pendingWin = 0;
             playerCredits = 1000; currentBet = 1; gameStage = 'BETTING'; holds.fill(false);
-            hideHighlights(); updateUI(); setStatusText("BANKROLL REFILLED! LAY A BET.");
+            hideHighlights(); updateUI(); setStatusText("BANKROLL REFILLED! LAY A BET." + statsSuffix());
             for (let h = 0; h < 3; h++) {
                 document.getElementById(`handResult-${h}`).innerText = "";
                 for (let c = 0; c < 5; c++) {
@@ -364,7 +398,7 @@
         function shuffle(array) {
             for (let i = array.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
-                [array[i], array[array[j] ? j : i]] = [array[j], array[i]];
+                [array[i], array[j]] = [array[j], array[i]];
             }
         }
 
@@ -517,6 +551,7 @@
         function evaluateTriplePlay() {
             let runningSum = 0;
             let finalLogs = [];
+            handsPlayed++;
 
             for (let h = 0; h < 3; h++) {
                 const checked = checkHandResult(hands[h]);
@@ -535,13 +570,14 @@
                 }
             }
 
+            if (runningSum > biggestWin) biggestWin = runningSum;
             document.getElementById('winDisplay').innerText = runningSum;
 
             if (runningSum > 0) {
                 setStatusText(`TOTAL MULTI-WIN: +${runningSum} CREDITS!`);
                 [523, 659, 783].forEach((v, i) => setTimeout(() => playSound(v, 0.15), i*80));
                 pendingWin = runningSum;
-                setTimeout(promptDoN, 1400); // Trigger Double or Nothing after short delay
+                donPromptTimer = setTimeout(promptDoN, 1400); // Trigger Double or Nothing after short delay
             } else {
                 setStatusText("NO WINNING COMBINATIONS ON THIS ROUND.");
                 playSound(160, 0.25, 'sawtooth');
@@ -589,12 +625,13 @@
         }
 
         function updateUI() {
+            saveState();
             document.getElementById('creditsDisplay').innerText = playerCredits;
             document.getElementById('betDisplay').innerText = currentBet;
             document.getElementById('totalBetDisplay').innerText = currentBet * 3;
 
             for (let col = 1; col <= 5; col++) {
-                document.querySelectorAll(`[data-bet="${col}"]`).forEach(el => {
+                document.querySelectorAll(`#paytableBody [data-bet="${col}"]`).forEach(el => {
                     if (col === currentBet) {
                         el.className = "bg-indigo-500/20 text-amber-400 font-black border-x border-indigo-500/30";
                     } else {
@@ -637,6 +674,7 @@
             
             document.getElementById('donPromptUi').classList.remove('hidden');
             document.getElementById('donGameUi').classList.add('hidden');
+            document.getElementById('donGameUi').classList.remove('flex');
             document.getElementById('donResultUi').classList.add('hidden');
             document.getElementById('donLoseUi').classList.add('hidden');
             playSound(800, 0.1);
@@ -650,7 +688,7 @@
             document.getElementById('donModal').classList.remove('flex');
             
             updateUI();
-            setStatusText("WINNINGS COLLECTED! PLACE YOUR BET.");
+            setStatusText("WINNINGS COLLECTED! PLACE YOUR BET." + statsSuffix());
             gameStage = 'BETTING';
             isAnimating = false;
             resetDealButton();
@@ -737,12 +775,24 @@
             }, 600);
         }
 
+        // --- v1.1 KEYBOARD CONTROLS: 1-5 hold, Space/Enter deal-draw, B bet one, M bet max, R refill ---
+        document.addEventListener('keydown', (e) => {
+            if (!document.getElementById('donModal').classList.contains('hidden')) return; // modal open: buttons own the keys
+            const tag = (document.activeElement && document.activeElement.tagName) || '';
+            if ((e.code === 'Space' || e.code === 'Enter') && tag === 'BUTTON') return; // avoid double-firing the focused button
+            if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); handleDealAction(); }
+            else if (e.key >= '1' && e.key <= '5') toggleHold(parseInt(e.key, 10) - 1);
+            else if (e.key === 'b' || e.key === 'B') adjustBet(1);
+            else if (e.key === 'm' || e.key === 'M') betMax();
+            else if (e.key === 'r' || e.key === 'R') resetBankroll();
+        });
+
         function endDoN() {
             document.getElementById('donModal').classList.add('hidden');
             document.getElementById('donModal').classList.remove('flex');
             pendingWin = 0;
             updateUI();
-            setStatusText("DOUBLE OR NOTHING LOST. PLACE YOUR BET.");
+            setStatusText("DOUBLE OR NOTHING LOST. PLACE YOUR BET." + statsSuffix());
             gameStage = 'BETTING';
             isAnimating = false;
             resetDealButton();
