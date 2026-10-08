@@ -1,6 +1,6 @@
 # Triple Play Premium Video Poker
 
-![Gameplay screenshot](screenshot.jpg)
+![Preston's Club — Triple Play Video Poker](banner.svg)
 
 A sleek, mobile-friendly video poker game — play **3 hands at once** for triple the action.
 
