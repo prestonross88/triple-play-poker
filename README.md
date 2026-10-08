@@ -1,5 +1,7 @@
 # Triple Play Premium Video Poker
 
+![Gameplay screenshot](screenshot.jpg)
+
 A sleek, mobile-friendly video poker game — play **3 hands at once** for triple the action.
 
 **Play it live:** https://prestonross88.github.io/triple-play-poker/
@@ -8,8 +10,8 @@ A sleek, mobile-friendly video poker game — play **3 hands at once** for tripl
 
 1. **Place your bet** — Bet One, or Bet Max for 5 coins per hand.
 2. **Deal** the cards.
-3. **Hold** the cards you want to keep (tap them, or press 1–5).
-4. **Draw** — your held cards are copied to all 3 hands, and each hand draws fresh cards.
+3. **Hold** the cards you want to keep (tap them, or press 1–5). Held cards sync to all 3 hands, as shown above.
+4. **Draw** — each hand draws fresh cards from its own deck.
 5. Winning hands pay according to the paytable. Bet Max unlocks the 4000-coin Royal Flush jackpot.
 
 Feeling lucky? After any win, try **Double or Nothing** — pick red or black to double your winnings.
